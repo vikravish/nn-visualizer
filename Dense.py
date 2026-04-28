@@ -7,7 +7,7 @@ class Dense:
     def __init__(self, input_size, output_size):
         # Note: np.something((rows, cols)) creates a matrix of "something"-s
         # I.e. np.random.randn(rows, cols) creates a matrix of random numbers around a normal distribution
-        # I.e. np.zeroes((rows, cols)) creates a matrix of zeros
+        # I.e. np.zeros((rows, cols)) creates a matrix of zeros
         
         # Create a matrix of random weights
         # Input size = rows, output size = cols because of matrix multiplication
@@ -37,12 +37,28 @@ class ReLU:
         return np.maximum(0,Z)
     
 X = np.random.randn(1,784) # Fake input data for testing -> 1 row x 784 cols
+
 layer1 = Dense(784, 128) # Layers are hardcoded
 z1 = layer1.forward(X) # Computes matrix-vector mutiplication between output weights matrix and input vector
+
 relu = ReLU() # Initialize a ReLU vector
 z1_relu = relu.forward(z1) # Apply ReLU function to z1 and store at z1_relu
 
+layer2 = Dense(128, 10) # Create second Dense layer from z1_relu
+logits = layer2.forward(z1_relu) # Create output layer from second Dense layer
+
 print("Input shape:", X.shape)
-print("Weights shape:", layer1.W.shape)
-print("Bias shape:", layer1.b.shape)
-print(z1_relu)
+
+print("Layer 1 W shape:", layer1.W.shape)
+
+print("Layer 1 b shape:", layer1.b.shape)
+
+print("z1 shape:", z1.shape)
+
+print("a1/ReLU shape:", z1_relu.shape)
+
+print("Layer 2 W shape:", layer2.W.shape)
+
+print("Logits shape:", logits.shape)
+
+print(logits)
