@@ -12,6 +12,7 @@ class Dense:
         # Create a matrix of random weights
         # Input size = rows, output size = cols because of matrix multiplication
         # Weights belong the layer they are producing outputs FOR
+        # Columns represent neurons, rows represent weights
         self.W = np.random.randn(input_size, output_size) * 0.01
         
         # Create a vector of biases, one per output neuron
@@ -35,6 +36,55 @@ class ReLU:
         self.Z = Z
         # Returns an augmented Z in which any activation < 0 gets treated as 0
         return np.maximum(0,Z)
+
+class Softmax:
+    # Converts output activation scores into probabilites using exponents to amplify differences
+    '''Softmaxing includes:
+    - Calculating the maximum value of each output row (for each image in the batch)
+    - Subtracting that from each value in the row (to avoid large numbers when exponentating)
+    - Exponentiating each value via e^x where x is the original value after subtracting
+    - Calculating the probability of each output using the new shifted values
+    '''
+    def forward(self, logits: np.ndarray) -> np.ndarray:
+        # Find max along each row
+        max_vals = np.max(logits, axis=1, keepdims=True)
+        
+        # Subtract maximums for each row
+        shifted_logits = logits - max_vals
+        
+        # Apply e^x via np.exp()
+        exp_values = np.exp(shifted_logits)
+        
+        # Sum to find probability divisor
+        sum_exp = np.sum(exp_values, axis=1, keepDims=True)
+        
+        # Calculate probabilites (normalize)
+        probabilities = exp_values/sum_exp
+        
+        # Store probabilities to use with backpropagation
+        self.probabilities = probabilities
+        
+        return probabilities
+
+# Loss class to use for learning using loss = -log(p_correct) for each softmaxed output
+class Loss:
+    # Takes in the softmaxed probabilities and true classifications for each digit
+    # Outputs total loss using cross-entropy
+    def forward(self, probs: np.ndarray, true_classes: np.ndarray) -> float:
+        # Calculate number of samples in batch
+        batch_size = probs.shape[0]
+        
+        # np.arange(size) creates an array of [0, 1, 2, ..., size-1]
+        # Creates indexing of image index, true class in order to track probability of the true class being selected
+        true_probs = probs[np.arange(batch_size), true_classes]
+        
+        # Take log
+        log_probs = np.log(true_probs)
+        
+        # Compute average loss across batch via negative mean
+        loss = -np.mean(log_probs)
+        
+        return loss
     
 X = np.random.randn(1,784) # Fake input data for testing -> 1 row x 784 cols
 
