@@ -19,7 +19,8 @@ class Dense:
     
     # Forward propagation method -> moving data through the layer
     # X is the layer/vector of neurons
-    def forward(self, X):
+    # Takes in previous layer as input, returns output layer 
+    def forward(self, X) -> np.ndarray:
         # Store input layer (X) locally in order for accessing during backpropagation
         self.X = X
         
@@ -28,4 +29,8 @@ class Dense:
     
 X = np.random.randn(1,784) # Fake input data for testing -> 1 row x 784 cols
 layer1 = Dense(784, 128) # Layers are hardcoded
-z1 = layer1.forward(X) # 
+z1 = layer1.forward(X) # Computes matrix-vector mutiplication between output weights matrix and input vector
+
+print("Input shape:", X.shape)
+print("Weights shape:", layer1.W.shape)
+print("Bias shape:", layer1.b.shape)
