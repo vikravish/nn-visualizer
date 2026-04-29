@@ -66,7 +66,7 @@ class Softmax:
         
         return probabilities
 
-# Loss class to use for learning using loss = -log(p_correct) for each softmaxed output
+# Loss class to use for learning using loss = -log(p_correct) for each softmaxed output vector for each image in batch
 class Loss:
     # Takes in the softmaxed probabilities and true classifications for each digit
     # Outputs total loss using cross-entropy
@@ -75,7 +75,8 @@ class Loss:
         batch_size = probs.shape[0]
         
         # np.arange(size) creates an array of [0, 1, 2, ..., size-1]
-        # Creates indexing of image index, true class in order to track probability of the true class being selected
+        # Creates indexing of [image index, true class] in order to track probability of the true class being selected
+        # So, each entry in probs look like [[0, 0.3], [1, 0.02]...] where the first input of each subarray is the index and the second input is the probability of the correct class being chosen
         true_probs = probs[np.arange(batch_size), true_classes]
         
         # Take log
