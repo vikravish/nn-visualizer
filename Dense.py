@@ -1,4 +1,3 @@
-from this import d
 import numpy as np
 
 class Dense:
@@ -22,7 +21,7 @@ class Dense:
     # Forward propagation method -> moving data through the layer
     # X is the layer/vector of neurons
     # Takes in previous layer as input, returns output layer 
-    def forward(self, ) -> np.ndarray:
+    def forward(self, input) -> np.ndarray:
         # Store input layer (X) locally in order for accessing during backpropagation
         self.input = input
         
@@ -61,7 +60,7 @@ class ReLU:
         pre_gradient = gradient.copy()
         
         # Set the gradient of any pre_activation < 0 to 0
-        pre_gradient[self.inputs <= 0] = 0
+        pre_gradient[self.pre_activation <= 0] = 0
         
         return pre_gradient
 
@@ -84,7 +83,7 @@ class Softmax:
         exp_values = np.exp(shifted_logits)
         
         # Sum to find probability divisor
-        sum_exp = np.sum(exp_values, axis=1, keepDims=True)
+        sum_exp = np.sum(exp_values, axis=1, keepdims=True)
         
         # Calculate probabilites (normalize)
         probabilities = exp_values/sum_exp
@@ -157,29 +156,33 @@ class SGD:
                 # Shift biases opposite to direction of gradient
                 layer.biases -= self.learning_rate * layer.delta_biases
     
-input = np.random.randn(1,784) # Fake input data for testing -> 1 row x 784 cols
+# Fake batch of 4 MNIST-like images
+inputs = np.random.randn(4, 784)
 
-layer1 = Dense(784, 128) # Layers are hardcoded
-activ1 = layer1.forward(input) # Computes matrix-vector mutiplication between output weights matrix and input vector
+# Fake correct labels
+labels = np.array([1, 3, 0, 5])
 
-relu = ReLU() # Initialize a ReLU vector
-activ1_relu = relu.forward(activ1) # Apply ReLU function to z1 and store at z1_relu
+dense1 = Dense(784, 128)
+relu1 = ReLU()
+dense2 = Dense(128, 10)
+softmax = Softmax()
+loss_fn = Loss()
+optimizer = SGD(learning_rate=0.01)
 
-layer2 = Dense(128, 10) # Create second Dense layer from z1_relu
-logits = layer2.forward(activ1_relu) # Create output layer from second Dense layer
+n_epochs = 100
+for epoch in range(n_epochs):
+    pre_activation1 = dense1.forward(inputs)
+    activation1 = relu1.forward(pre_activation1)
+    logits = dense2.forward(activation1)
+    probabilities = softmax.forward(logits)
+    loss = loss_fn.forward(probabilities, labels)
 
-print("Input shape:", input.shape)
+    if epoch == 0 or (epoch + 1) % 10 == 0:
+        print(f"Epoch {epoch + 1}/{n_epochs}, loss: {loss}")
 
-print("Layer 1 W shape:", layer1.W.shape)
+    grad_logits = loss_fn.backward(probabilities, labels)
+    grad_activation1 = dense2.backward(grad_logits)
+    grad_pre_activation1 = relu1.backward(grad_activation1)
+    dense1.backward(grad_pre_activation1)
 
-print("Layer 1 b shape:", layer1.b.shape)
-
-print("z1 shape:", activ1.shape)
-
-print("a1/ReLU shape:", activ1_relu.shape)
-
-print("Layer 2 W shape:", layer2.W.shape)
-
-print("Logits shape:", logits.shape)
-
-print(logits)
+    optimizer.step([dense1, dense2])
