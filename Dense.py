@@ -59,7 +59,7 @@ class ReLU:
         # Don't overwrite original gradient matrix
         pre_gradient = gradient.copy()
         
-        # Set the gradient of any pre_activation < 0 to 0
+        # Set the gradient of any pre_activation < 0 to 0 (Main purpose of ReLU)
         pre_gradient[self.pre_activation <= 0] = 0
         
         return pre_gradient
