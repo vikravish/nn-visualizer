@@ -1,11 +1,15 @@
 import numpy as np
 
 class MLP:
-    def __init__(self):
+    def __init__(self, num_hidden_layers, num_hidden_nodes, num_output_nodes):
         pass
 
     class Dense:
-        # Initialize a Dense layer: a layer that is fully connected to a previous layer)
+        
+        '''
+        Initialize a Dense layer: a layer that is fully connected to a previous layer)
+        Note: Input layers are NOT Dense layers!
+        '''
         # Input size is size of previous layer
         # Output size is size of this layer
         def __init__(self, input_size, output_size):
@@ -13,23 +17,29 @@ class MLP:
             # I.e. np.random.randn(rows, cols) creates a matrix of random numbers around a normal distribution
             # I.e. np.zeros((rows, cols)) creates a matrix of zeros
             
-            # Create a matrix of random weights
-            # Input size = rows, output size = cols because of matrix multiplication
-            # Weights belong the layer they are producing outputs FOR
-            # Columns represent neurons, rows represent weights
+            '''
+            Create a matrix of random weights
+            Weights are randomized in order to break symmetry.
+            This is important so that weights don't get updated in tandem, because that would cause all of them to receive similar updates'''
+            # Input size = rows, output size = cols because of matrix multiplication ([m x n] * [n x o] = [m x o])
+            # Weights belong to the layer they are producing outputs FOR (so they come before the node)
+            # Columns represent nodes/neurons, rows represent weights
             self.weights = np.random.randn(input_size, output_size) * 0.01
             
-            # Create a vector of biases, one per output neuron
+            'Create a vector of biases, one per output neuron'
+            # Weights start as randomized, biases start as 0 because weights create enough randomization
+            # Biases act as a normalization to allow processing of zero-inputs. Biases remain constant throughout each neuron itself, whereas weights vary per individual connection.
             self.biases = np.zeros((1, output_size))
         
-        # Forward propagation method -> moving data through the layer
+        'Forward propagation method -> moving data through the layer'
         # X is the layer/vector of neurons
         # Takes in previous layer as input, returns output layer 
         def forward(self, input) -> np.ndarray:
             # Store input layer (X) locally in order for accessing during backpropagation
             self.input = input
             
-            # Return next layer via matrix multiplication (@ operator) between + bias
+            # Return next layer via matrix multiplication (@ operator) between input * weight + bias
+            # Z = W*A + b
             return input @ self.weights + self.biases
         
         def backward(self, delta_pre_activation: np.ndarray) -> np.ndarray:
@@ -50,13 +60,18 @@ class MLP:
             
             return delta_input
 
-    # ReLU class in order to apply ReLU activation function to a Dense activation vector
+    '''ReLU class in order to apply ReLU activation function to a Dense activation vector'''
     # Incorporating ReLU avoids linearity, therefore making the use of multiple layers meaningful
+    # In English that means the activation function determines whether or not an input meets a certain threshold to pass to the next layer.
+    # Without an activation function, you would just be making repeated linear combinations which is just linear regression in a trench coat.
     # A "ReLU" is a vector in which the activations undergo ReLU transformation
+    # There are multiple different kinds of activation functions, ReLU is just one of them and is very basic.
     class ReLU:
         def forward(self, pre_activation: np.ndarray) -> np.ndarray:
             self.pre_activation = pre_activation
-            # Returns an augmented pre-activation in which any pre-activation < 0 gets treated as 0
+            # Returns an augmented pre-activation in which any pre-activation < 0 gets treated as 0 
+            # (This is what ReLU is in essence)
+            'Return a matrix of just values > 0, with 0s otherwise'
             return np.maximum(0,pre_activation)
         
         def backward(self, gradient: np.ndarray) -> np.ndarray:
@@ -72,9 +87,9 @@ class MLP:
         # Converts output activation scores into probabilites using exponents to amplify differences
         '''Softmaxing includes:
         - Calculating the maximum value of each output row (for each image in the batch)
-        - Subtracting that from each value in the row (to avoid large numbers when exponentating)
+        - Subtracting that from each logit (pre-softmaxed value) in the row (to avoid large numbers when exponentating)
         - Exponentiating each value via e^x where x is the original value after subtracting
-        - Calculating the probability of each output using the new shifted values
+        - Dividing that by the sum of each softmaxed value to normalize, resulting in a probability [0,1]
         '''
         def forward(self, logits: np.ndarray) -> np.ndarray:
             # Find max along each row
@@ -99,8 +114,10 @@ class MLP:
 
     # Loss class to use for learning using loss = -log(p_correct) for each softmaxed output vector for each image in batch
     class Loss:
-        # Takes in the softmaxed probabilities and true classifications for each digit
-        # Outputs total loss using cross-entropy
+        '''
+        Takes in the softmaxed probabilities and true classifications for each digit
+        Outputs total loss using cross-entropy
+        '''
         def forward(self, probs: np.ndarray, true_classes: np.ndarray) -> float:
             # Calculate number of samples in batch
             batch_size = probs.shape[0]
@@ -111,8 +128,9 @@ class MLP:
             true_probs = probs[np.arange(batch_size), true_classes]
             
             # Take log
+            true_probs = np.clip(true_probs, 1e-9, 1 - 1e-9) # prevents log(0) from diverging to -infinity
             log_probs = np.log(true_probs)
-            true_probs = np.clip(probs, 1e-9, 1 - 1e-9) # prevents log(0) from diverging to -infinity
+
             
             # Compute average loss across batch via negative mean
             loss = -np.mean(log_probs)
@@ -132,16 +150,16 @@ class MLP:
             # Compute gradient
             '''
             Gradient measures how sensitive the change in loss is in respect to a single value
-            For the SoftMax + CrossEntropy combo alone:
+            For the SoftMax + CrossEntropy combo ALONE:
             Gradient involves calculating the difference, for each neuron, between the actual vs desired probability (0 for non-target classification, 1 for target classification)
             probs contains probability information for each neuron of the output layer.
             The probability difference for each input in batch gets summed and divided by # batches to get the average difference in actual vs desired probability.
             THAT is the gradient of the entire batch.
             '''
-            layer_gradient = (probs - one_hot)
-            batch_gradient = layer_gradient / batch_size
+            layer_gradients = (probs - one_hot) # Computes the gradients for each example, resulting in a matrix of difference per node, per example, per batch
+            batch_gradients = layer_gradients / batch_size # Divide each individual gradient by size of batch to calculate specific loss relative to the batch
             
-            return batch_gradient
+            return batch_gradients
         
     class SGD:
         # Stochastic Gradient Descent is the process of actually changing the weights.
@@ -153,14 +171,14 @@ class MLP:
         def step(self, layers: list) -> None:
             # Loop through each dense layer that we want to update
             for layer in layers:
-                # Only want to update layers that have weights (ie not the first layer)
+                # Only want to update layers that have weights (i.e. not the first layer)
                 if hasattr(layer, "weights"):
                     # Shift weights opposite to direction of gradient
                     layer.weights -= self.learning_rate * layer.delta_weights
                     # Shift biases opposite to direction of gradient
                     layer.biases -= self.learning_rate * layer.delta_biases
         
-    # Fake batch of 4 MNIST-like images
+    # Fake batch of 4 MNIST-like images (784 pixels)
     inputs = np.random.randn(4, 784)
 
     # Fake correct labels
