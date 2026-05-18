@@ -1,4 +1,6 @@
 import numpy as np
+import json
+
 class Dense:
     
     '''
@@ -283,7 +285,33 @@ class MetricsTracker:
     # History getter
     def get_history(self):
         return self.history
-        
+    
+    # Safe to json for frontend
+    def save_json(self, filepath):
+        with open(filepath, "w") as file:
+            json.dump(self.history, file, indent=4)
+
+# Trainer class in order to allow for customizations within training
+# Will also handle minibatching, training/testing split, etc
+class Trainer:
+    def __init__(self, model, tracker):
+        self.model = model
+        self.tracker = tracker
+    
+    def train(self, inputs, labels, num_epochs, learning_rate):
+        for epoch in range(num_epochs):
+            probabilities = self.model.forward(inputs)
+            loss = self.model.compute_loss(probabilities, labels)
+            self.model.backward(probabilities, labels)
+            accuracy = self.tracker.calculate_accuracy(probabilities, labels)
+            gradient_norms = self.tracker.calculate_model_gradient_norms(model)
+            self.tracker.log_epoch(epoch, loss, accuracy, gradient_norms)
+            
+            self.model.update(learning_rate=learning_rate)
+
+            if epoch == 0 or (epoch) % 10 == 9:
+                print(f"Epoch {epoch}/{num_epochs-1}, Loss: {loss}, Accuracy: {accuracy}")
+                
 # Fake batch of n MNIST-like images (784 pixels)
 inputs = np.random.randn(10, 784)
 
@@ -302,6 +330,9 @@ learning_rate = 0.01
 # Initialize tracker
 tracker = MetricsTracker()
 
+# Initialize trainer
+trainer = Trainer(model, tracker)
+
 # Add config to tracker
 # Append config parameters to tracker: batch size, input size, hidden layer size, output size, learning rate, batch size, #epochs
 config = {
@@ -314,16 +345,6 @@ config = {
     }
 tracker.log_config(config)
 
-for epoch in range(num_epochs):
-    probabilities = model.forward(inputs)
-    loss = model.compute_loss(probabilities, labels)
-    model.backward(probabilities, labels)
-    
-    tracker.log_epoch(epoch, loss, tracker.calculate_accuracy(probabilities, labels), tracker.calculate_model_gradient_norms(model))
-    
-    model.update(learning_rate=learning_rate)
+trainer.train(inputs, labels, num_epochs=100, learning_rate=0.01)
 
-    if epoch == 0 or (epoch) % 10 == 9:
-        print(f"Epoch {epoch}/{num_epochs-1}, Loss: {loss}")
-
-print(tracker.get_history())
+#print(tracker.get_history())
