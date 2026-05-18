@@ -365,56 +365,56 @@ class Trainer:
         return test_results
         
                 
-'''# Fake batch of n MNIST-like images (784 pixels)
-inputs = np.random.randn(10, 784)
+if __name__ == "__main__":
+    '''# Fake batch of n MNIST-like images (784 pixels)
+    inputs = np.random.randn(10, 784)
 
-# Fake correct labels (one digit 0–9 per image in the batch)
-labels = np.random.randint(0, 10, size=inputs.shape[0])'''
+    # Fake correct labels (one digit 0–9 per image in the batch)
+    labels = np.random.randint(0, 10, size=inputs.shape[0])'''
 
-# Download mnist dataset, assign
-mnist = fetch_openml("mnist_784", version=1)
-inputs = mnist.data.to_numpy()
-labels = mnist.target.astype(int).to_numpy()
+    # Download mnist dataset, assign
+    mnist = fetch_openml("mnist_784", version=1)
+    inputs = mnist.data.to_numpy()
+    labels = mnist.target.astype(int).to_numpy()
 
-# Adjust train/test parameters
-inputs = inputs/255
-inputs = inputs[:1200]
-labels = labels[:1200]
-training_inputs = inputs[:1000]
-training_labels = labels[:1000]
-testing_inputs = inputs[1000:]
-testing_labels = labels[1000:]
+    # Adjust train/test parameters
+    inputs = inputs/255
+    inputs = inputs[:1200]
+    labels = labels[:1200]
+    training_inputs = inputs[:1000]
+    training_labels = labels[:1000]
+    testing_inputs = inputs[1000:]
+    testing_labels = labels[1000:]
 
-# Initialize model
-num_classifications = 10
-hidden_size = 128
-model = MLP(input_size=inputs.shape[1], hidden_size=hidden_size, output_size=num_classifications)
+    # Initialize model
+    num_classifications = 10
+    hidden_size = 128
+    model = MLP(input_size=inputs.shape[1], hidden_size=hidden_size, output_size=num_classifications)
 
-# Set number of epochs (number of learning cycles/forward-backward passes)
-num_epochs = 500
-learning_rate = 0.01
-batch_size = 48
+    # Set number of epochs (number of learning cycles/forward-backward passes)
+    num_epochs = 500
+    learning_rate = 0.01
+    batch_size = 48
 
-# Initialize tracker
-tracker = MetricsTracker()
+    # Initialize tracker
+    tracker = MetricsTracker()
 
-# Initialize trainer
-trainer = Trainer(model, tracker)
+    # Initialize trainer
+    trainer = Trainer(model, tracker)
 
-# Add config to tracker
-# Append config parameters to tracker: batch size, input size, hidden layer size, output size, learning rate, batch size, #epochs
-config = {
-    "Total Inputs": inputs.shape[0],
-    "Batch Size": batch_size,
-    "Input Size": inputs.shape[1],
-    "Hidden Layer Size": hidden_size,
-    "Output Size": num_classifications,
-    "Learning Rate": learning_rate,
-    "# Epochs": num_epochs
+    # Add config to tracker
+    config = {
+        "Total Inputs": inputs.shape[0],
+        "Batch Size": batch_size,
+        "Input Size": inputs.shape[1],
+        "Hidden Layer Size": hidden_size,
+        "Output Size": num_classifications,
+        "Learning Rate": learning_rate,
+        "# Epochs": num_epochs
     }
-tracker.log_config(config)
+    tracker.log_config(config)
 
-trainer.train(training_inputs, training_labels, num_epochs=num_epochs, learning_rate=learning_rate, batch_size=batch_size)
+    trainer.train(training_inputs, training_labels, num_epochs=num_epochs, learning_rate=learning_rate, batch_size=batch_size)
 
-test_results = trainer.test(testing_inputs, testing_labels)
-print(f"Testing Loss: {test_results["loss"]}, Testing Accuracy: {test_results["accuracy"]}")
+    test_results = trainer.test(testing_inputs, testing_labels)
+    print(f"Testing Loss: {test_results['loss']}, Testing Accuracy: {test_results['accuracy']}")
