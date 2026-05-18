@@ -243,12 +243,12 @@ class MetricsTracker:
             "epochs": []
         }
     
-    # Append config parameters to tracker: input size, hidden layer size, output size, learning rate, batch size, #epochs
+    # Append config parameters to tracker: batch size, input size, hidden layer size, output size, learning rate, #epochs
     def log_config(self, config):
         self.history["config"] = config
     
     # Calculate gradient norm
-    def calculate_gradient_norm(self, layer):
+    def calculate_layer_gradient_norm(self, layer):
         # Compute gradient norm to measure gradient descent between each epoch
         # We use the norm because every connection has a different weight and bias
         norms = {}
@@ -256,19 +256,20 @@ class MetricsTracker:
         norms["biases"] = float(np.linalg.norm(layer.delta_biases))
         return norms
     
-    # Log gradient norm
-    def log_gradient_norms(self, model):
+    # Log gradient norms
+    def calculate_model_gradient_norms(self, model):
         gradient_norms = {}
         layers = {"dense1" : model.dense1, "dense2" : model.dense2}
         for layer_name, layer in layers.items():
             if hasattr(layer, "weights") and hasattr(layer, "biases"):
-                gradient_norms[layer_name] = self.calculate_gradient_norm(layer)
+                gradient_norms[layer_name] = self.calculate_layer_gradient_norm(layer)
         return gradient_norms
     
     # Log accuracy
     def calculate_accuracy(self, predictions, labels):
         predicted_classes = np.argmax(predictions, axis=1)
         return float(np.mean(predicted_classes==labels))
+    
     # Log index, loss, and accuracy for each epoch
     def log_epoch(self, epoch, loss, accuracy, gradient_norms):
         epoch_data = {
@@ -290,18 +291,39 @@ inputs = np.random.randn(10, 784)
 labels = np.random.randint(0, 10, size=inputs.shape[0])
 
 # Initialize model
-num_classes = 10
-model = MLP(input_size=inputs.shape[1], hidden_size=128, output_size=num_classes)
+num_classifications = 10
+hidden_size = 128
+model = MLP(input_size=inputs.shape[1], hidden_size=hidden_size, output_size=num_classifications)
 
 # Set number of epochs (number of learning cycles/forward-backward passes)
-n_epochs = 100
+num_epochs = 100
 learning_rate = 0.01
-history = {}
-for epoch in range(n_epochs):
+
+# Initialize tracker
+tracker = MetricsTracker()
+
+# Add config to tracker
+# Append config parameters to tracker: batch size, input size, hidden layer size, output size, learning rate, batch size, #epochs
+config = {
+    "Batch Size": inputs.shape[0],
+    "Input Size": inputs.shape[1],
+    "Hidden Layer Size": hidden_size,
+    "Output Size": num_classifications,
+    "Learning Rate": learning_rate,
+    "# Epochs": num_epochs
+    }
+tracker.log_config(config)
+
+for epoch in range(num_epochs):
     probabilities = model.forward(inputs)
     loss = model.compute_loss(probabilities, labels)
     model.backward(probabilities, labels)
+    
+    tracker.log_epoch(epoch, loss, tracker.calculate_accuracy(probabilities, labels), tracker.calculate_model_gradient_norms(model))
+    
     model.update(learning_rate=learning_rate)
 
-    if epoch == 0 or (epoch + 1) % 10 == 0:
-        print(f"Epoch {epoch + 1}/{n_epochs}, loss: {loss}")
+    if epoch == 0 or (epoch) % 10 == 9:
+        print(f"Epoch {epoch}/{num_epochs-1}, Loss: {loss}")
+
+print(tracker.get_history())
