@@ -272,14 +272,57 @@ class MetricsTracker:
     def calculate_accuracy(self, predictions, labels):
         predicted_classes = np.argmax(predictions, axis=1)
         return float(np.mean(predicted_classes==labels))
-    
-    # Log index, loss, accuracy, and gradient norms for each epoch
-    def log_epoch(self, epoch, loss, accuracy, gradient_norms):
+
+    def compute_weight_stats(self, model):
+        stats = {}
+        for name, layer in [("dense1", model.dense1), ("dense2", model.dense2)]:
+            flat = layer.weights.flatten()
+            counts, edges = np.histogram(flat, bins=30)
+            stats[name] = {
+                "mean": float(np.mean(flat)),
+                "std": float(np.std(flat)),
+                "hist_counts": counts.tolist(),
+                "hist_edges": edges.tolist(),
+                "min": float(np.min(flat)),
+                "max": float(np.max(flat)),
+            }
+        return stats
+
+    def compute_bias_stats(self, model):
+        return {
+            "dense1": {
+                "values": model.dense1.biases.flatten().tolist(),
+                "mean": float(np.mean(model.dense1.biases)),
+                "std": float(np.std(model.dense1.biases)),
+            },
+            "dense2": {
+                "values": model.dense2.biases.flatten().tolist(),
+                "mean": float(np.mean(model.dense2.biases)),
+                "std": float(np.std(model.dense2.biases)),
+            }
+        }
+
+    def compute_activation_stats(self, model):
+        act = model.activation1
+        return {
+            "dense1": {
+                "mean": float(np.mean(act)),
+                "std": float(np.std(act)),
+                "sparsity": float(np.mean(act == 0)),
+            }
+        }
+
+    # Log index, loss, accuracy, gradient norms, and layer stats for each epoch
+    def log_epoch(self, epoch, loss, accuracy, gradient_norms,
+                  weight_stats=None, bias_stats=None, activation_stats=None):
         epoch_data = {
             "epoch": int(epoch),
             "loss": float(loss),
             "accuracy": float(accuracy),
-            "gradient_norms": gradient_norms
+            "gradient_norms": gradient_norms,
+            "weight_stats": weight_stats,
+            "bias_stats": bias_stats,
+            "activation_stats": activation_stats,
         }
         self.history["epochs"].append(epoch_data)
     
@@ -356,6 +399,62 @@ class Trainer:
                 print(f"Training Epoch {epoch}/{num_epochs-1}, Training Loss: {avg_loss}, Training Accuracy: {avg_accuracy}")
         return self.tracker.get_history()
     
+    def train_stream(self, inputs, labels, num_epochs, learning_rate, batch_size):
+        """Like train(), but yields each epoch's data dict for SSE streaming."""
+        num_samples = inputs.shape[0]
+
+        for epoch in range(num_epochs):
+            indices = np.random.permutation(num_samples)
+            shuffled_inputs = inputs[indices]
+            shuffled_labels = labels[indices]
+
+            epoch_losses = []
+            epoch_accuracies = []
+            epoch_gradient_norms = []
+
+            for start in range(0, num_samples, batch_size):
+                end = start + batch_size
+                batch_inputs = shuffled_inputs[start:end]
+                batch_labels = shuffled_labels[start:end]
+                probabilities = self.model.forward(batch_inputs)
+                loss = self.model.compute_loss(probabilities, batch_labels)
+                self.model.backward(probabilities, batch_labels)
+                accuracy = self.tracker.calculate_accuracy(probabilities, batch_labels)
+                gradient_norms = self.tracker.calculate_model_gradient_norms(self.model)
+
+                epoch_losses.append(loss)
+                epoch_accuracies.append(accuracy)
+                epoch_gradient_norms.append(gradient_norms)
+                self.model.update(learning_rate=learning_rate)
+
+            avg_loss = float(np.mean(epoch_losses))
+            avg_accuracy = float(np.mean(epoch_accuracies))
+            avg_gradient_norms = self.average_gradient_norms(epoch_gradient_norms)
+            weight_stats = self.tracker.compute_weight_stats(self.model)
+            bias_stats = self.tracker.compute_bias_stats(self.model)
+            activation_stats = self.tracker.compute_activation_stats(self.model)
+
+            self.tracker.log_epoch(
+                epoch=epoch,
+                loss=avg_loss,
+                accuracy=avg_accuracy,
+                gradient_norms=avg_gradient_norms,
+                weight_stats=weight_stats,
+                bias_stats=bias_stats,
+                activation_stats=activation_stats,
+            )
+
+            yield {
+                "type": "epoch",
+                "epoch": epoch,
+                "loss": avg_loss,
+                "accuracy": avg_accuracy,
+                "gradient_norms": avg_gradient_norms,
+                "weight_stats": weight_stats,
+                "bias_stats": bias_stats,
+                "activation_stats": activation_stats,
+            }
+
     # Testing implementation against training results
     def test(self, inputs, labels):
         probabilities = self.model.forward(inputs)
