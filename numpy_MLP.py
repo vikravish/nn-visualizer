@@ -298,20 +298,60 @@ class Trainer:
     def __init__(self, model, tracker):
         self.model = model
         self.tracker = tracker
-    
-    def train(self, inputs, labels, num_epochs, learning_rate):
-        for epoch in range(num_epochs):
-            probabilities = self.model.forward(inputs)
-            loss = self.model.compute_loss(probabilities, labels)
-            self.model.backward(probabilities, labels)
-            accuracy = self.tracker.calculate_accuracy(probabilities, labels)
-            gradient_norms = self.tracker.calculate_model_gradient_norms(model)
-            self.tracker.log_epoch(epoch, loss, accuracy, gradient_norms)
-            
-            self.model.update(learning_rate=learning_rate)
 
+    # Helper to average gradient norms across batch
+    def average_gradient_norms(self, batch_gradient_norms):
+        averaged = {}
+        for batch_norms in batch_gradient_norms:
+            for layer_name, norms in batch_norms.items():
+                if layer_name not in averaged:
+                    averaged[layer_name] = {"weights": [], "biases": []}
+                averaged[layer_name]["weights"].append(norms["weights"])
+                averaged[layer_name]["biases"].append(norms["biases"])
+        for layer_name in averaged:
+            averaged[layer_name]["weights"] = float(np.mean(averaged[layer_name]["weights"]))
+            averaged[layer_name]["biases"] = float(np.mean(averaged[layer_name]["biases"]))
+        return averaged
+    
+    def train(self, inputs, labels, num_epochs, learning_rate, batch_size):
+        num_samples = inputs.shape[0]
+        
+        for epoch in range(num_epochs):
+            # Shuffle entries in dataset for every epoch in case of clumping
+            indices = np.random.permutation(num_samples)
+            shuffled_inputs = inputs[indices]
+            shuffled_labels = labels[indices]
+            
+            # Initialize epoch-specific data
+            epoch_losses = []
+            epoch_accuracies = []
+            epoch_gradient_norms = []
+            # Train with batch
+            for start in range(0, num_samples, batch_size):
+                end = start + batch_size
+                batch_inputs = shuffled_inputs[start:end]
+                batch_labels = shuffled_labels[start:end]
+                probabilities = self.model.forward(batch_inputs)
+                loss = self.model.compute_loss(probabilities, batch_labels)
+                self.model.backward(probabilities, batch_labels)
+                accuracy = self.tracker.calculate_accuracy(probabilities, batch_labels)
+                gradient_norms = self.tracker.calculate_model_gradient_norms(self.model)
+                
+                # Append epoch information
+                epoch_losses.append(loss)
+                epoch_accuracies.append(accuracy)
+                epoch_gradient_norms.append(gradient_norms)
+                self.model.update(learning_rate=learning_rate)
+
+            # Tally averages for epoch
+            avg_loss = float(np.mean(epoch_losses))
+            avg_accuracy = float(np.mean(epoch_accuracies))
+            avg_gradient_norms = self.average_gradient_norms(epoch_gradient_norms)
+            
+            self.tracker.log_epoch(epoch=epoch, loss=avg_loss, accuracy=avg_accuracy, gradient_norms=avg_gradient_norms)
             if epoch == 0 or (epoch) % 10 == 9:
-                print(f"Epoch {epoch}/{num_epochs-1}, Loss: {loss}, Accuracy: {accuracy}")
+                print(f"Epoch {epoch}/{num_epochs-1}, Loss: {avg_loss}, Accuracy: {avg_accuracy}")
+        return self.tracker.get_history()
                 
 '''# Fake batch of n MNIST-like images (784 pixels)
 inputs = np.random.randn(10, 784)
@@ -336,7 +376,8 @@ model = MLP(input_size=inputs.shape[1], hidden_size=hidden_size, output_size=num
 
 # Set number of epochs (number of learning cycles/forward-backward passes)
 num_epochs = 500
-learning_rate = 0.001
+learning_rate = 0.01
+batch_size = 32
 
 # Initialize tracker
 tracker = MetricsTracker()
@@ -347,7 +388,8 @@ trainer = Trainer(model, tracker)
 # Add config to tracker
 # Append config parameters to tracker: batch size, input size, hidden layer size, output size, learning rate, batch size, #epochs
 config = {
-    "Batch Size": inputs.shape[0],
+    "Total Inputs": inputs.shape[0],
+    "Batch Size": batch_size,
     "Input Size": inputs.shape[1],
     "Hidden Layer Size": hidden_size,
     "Output Size": num_classifications,
@@ -356,6 +398,4 @@ config = {
     }
 tracker.log_config(config)
 
-trainer.train(inputs, labels, num_epochs=num_epochs, learning_rate=0.01)
-
-#print(tracker.get_history())
+trainer.train(inputs, labels, num_epochs=num_epochs, learning_rate=learning_rate, batch_size=batch_size)
