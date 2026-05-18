@@ -259,7 +259,7 @@ class MetricsTracker:
         norms["biases"] = float(np.linalg.norm(layer.delta_biases))
         return norms
     
-    # Log gradient norms
+    # Calculate gradient norms
     def calculate_model_gradient_norms(self, model):
         gradient_norms = {}
         layers = {"dense1" : model.dense1, "dense2" : model.dense2}
@@ -268,12 +268,12 @@ class MetricsTracker:
                 gradient_norms[layer_name] = self.calculate_layer_gradient_norm(layer)
         return gradient_norms
     
-    # Log accuracy
+    # Calculate accuracy
     def calculate_accuracy(self, predictions, labels):
         predicted_classes = np.argmax(predictions, axis=1)
         return float(np.mean(predicted_classes==labels))
     
-    # Log index, loss, and accuracy for each epoch
+    # Log index, loss, accuracy, and gradient norms for each epoch
     def log_epoch(self, epoch, loss, accuracy, gradient_norms):
         epoch_data = {
             "epoch": int(epoch),
@@ -294,6 +294,9 @@ class MetricsTracker:
 
 # Trainer class in order to allow for customizations within training
 # Will also handle minibatching, training/testing split, etc
+# We minibatch in order to increase the amount of updates and to add noise to improve the generalization of the trainer
+# Without mini batching, you only update once per epoch (for each image). WITH minibatching, you update #images/batch size times per epoch.
+# Without batches, for 100 epochs you have 100 updates. With batch size of 32, you have 3200 updates.
 class Trainer:
     def __init__(self, model, tracker):
         self.model = model
@@ -350,8 +353,17 @@ class Trainer:
             
             self.tracker.log_epoch(epoch=epoch, loss=avg_loss, accuracy=avg_accuracy, gradient_norms=avg_gradient_norms)
             if epoch == 0 or (epoch) % 10 == 9:
-                print(f"Epoch {epoch}/{num_epochs-1}, Loss: {avg_loss}, Accuracy: {avg_accuracy}")
+                print(f"Training Epoch {epoch}/{num_epochs-1}, Training Loss: {avg_loss}, Training Accuracy: {avg_accuracy}")
         return self.tracker.get_history()
+    
+    # Testing implementation against training results
+    def test(self, inputs, labels):
+        probabilities = self.model.forward(inputs)
+        loss = self.model.compute_loss(probabilities, labels)
+        accuracy = self.tracker.calculate_accuracy(probabilities, labels)
+        test_results = {"loss": float(loss), "accuracy": float(accuracy)}
+        return test_results
+        
                 
 '''# Fake batch of n MNIST-like images (784 pixels)
 inputs = np.random.randn(10, 784)
@@ -364,10 +376,14 @@ mnist = fetch_openml("mnist_784", version=1)
 inputs = mnist.data.to_numpy()
 labels = mnist.target.astype(int).to_numpy()
 
-# Reduce training size
+# Adjust train/test parameters
 inputs = inputs/255
-inputs = inputs[:1000]
-labels = labels[:1000]
+inputs = inputs[:1200]
+labels = labels[:1200]
+training_inputs = inputs[:1000]
+training_labels = labels[:1000]
+testing_inputs = inputs[1000:]
+testing_labels = labels[1000:]
 
 # Initialize model
 num_classifications = 10
@@ -377,7 +393,7 @@ model = MLP(input_size=inputs.shape[1], hidden_size=hidden_size, output_size=num
 # Set number of epochs (number of learning cycles/forward-backward passes)
 num_epochs = 500
 learning_rate = 0.01
-batch_size = 32
+batch_size = 48
 
 # Initialize tracker
 tracker = MetricsTracker()
@@ -398,4 +414,7 @@ config = {
     }
 tracker.log_config(config)
 
-trainer.train(inputs, labels, num_epochs=num_epochs, learning_rate=learning_rate, batch_size=batch_size)
+trainer.train(training_inputs, training_labels, num_epochs=num_epochs, learning_rate=learning_rate, batch_size=batch_size)
+
+test_results = trainer.test(testing_inputs, testing_labels)
+print(f"Testing Loss: {test_results["loss"]}, Testing Accuracy: {test_results["accuracy"]}")
