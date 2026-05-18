@@ -1,5 +1,6 @@
 import numpy as np
 import json
+from sklearn.datasets import fetch_openml
 
 class Dense:
     
@@ -312,11 +313,21 @@ class Trainer:
             if epoch == 0 or (epoch) % 10 == 9:
                 print(f"Epoch {epoch}/{num_epochs-1}, Loss: {loss}, Accuracy: {accuracy}")
                 
-# Fake batch of n MNIST-like images (784 pixels)
+'''# Fake batch of n MNIST-like images (784 pixels)
 inputs = np.random.randn(10, 784)
 
 # Fake correct labels (one digit 0–9 per image in the batch)
-labels = np.random.randint(0, 10, size=inputs.shape[0])
+labels = np.random.randint(0, 10, size=inputs.shape[0])'''
+
+# Download mnist dataset, assign
+mnist = fetch_openml("mnist_784", version=1)
+inputs = mnist.data.to_numpy()
+labels = mnist.target.astype(int).to_numpy()
+
+# Reduce training size
+inputs = inputs/255
+inputs = inputs[:1000]
+labels = labels[:1000]
 
 # Initialize model
 num_classifications = 10
@@ -324,8 +335,8 @@ hidden_size = 128
 model = MLP(input_size=inputs.shape[1], hidden_size=hidden_size, output_size=num_classifications)
 
 # Set number of epochs (number of learning cycles/forward-backward passes)
-num_epochs = 100
-learning_rate = 0.01
+num_epochs = 500
+learning_rate = 0.001
 
 # Initialize tracker
 tracker = MetricsTracker()
@@ -345,6 +356,6 @@ config = {
     }
 tracker.log_config(config)
 
-trainer.train(inputs, labels, num_epochs=100, learning_rate=0.01)
+trainer.train(inputs, labels, num_epochs=num_epochs, learning_rate=0.01)
 
 #print(tracker.get_history())
